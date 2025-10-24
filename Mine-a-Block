@@ -1,0 +1,130 @@
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local xrayColors = {
+Color3.fromRGB(108,88,75),Color3.fromRGB(120,97,83),
+Color3.fromRGB(75,151,75),Color3.fromRGB(75,151,75),
+Color3.fromRGB(100,100,100),Color3.fromRGB(89,18,18),
+Color3.fromRGB(132,26,26),Color3.fromRGB(109,22,22),
+Color3.fromRGB(58,117,58),Color3.fromRGB(58,117,58),
+Color3.fromRGB(65,130,65),Color3.fromRGB(142,110,78),
+Color3.fromRGB(188,169,136)
+}
+local xrayEnabled = false
+local function isXray(part) for _,c in ipairs(xrayColors) do if part.Color==c then return true end end return false end
+local function updateXray()
+    for _,o in pairs(workspace:GetDescendants()) do
+        if o:IsA("BasePart") and isXray(o) then
+            o.LocalTransparencyModifier = xrayEnabled and 0.8 or 0
+        end
+    end
+end
+
+local espEnabled = true
+local espModels = {}
+local rarityColors = {
+    ["Legendary"] = Color3.fromRGB(255,215,0),
+    ["Mythic"] = Color3.fromRGB(148,0,211),
+    ["Divine"] = Color3.fromRGB(0,191,255)
+}
+local function createESP(model, part, rarity, name)
+    if espModels[model] then return end
+    if not part then return end
+    local box = Instance.new("BoxHandleAdornment",part)
+    box.Adornee = part
+    box.Size = part.Size + Vector3.new(0.1,0.1,0.1)
+    box.Transparency = 0.75
+    box.AlwaysOnTop = true
+    box.Color3 = rarityColors[rarity] or part.Color
+    local billboard = Instance.new("BillboardGui",part)
+    billboard.Size = UDim2.new(0,100,0,30)
+    billboard.Adornee = part
+    billboard.AlwaysOnTop = true
+    local label = Instance.new("TextLabel",billboard)
+    label.Size = UDim2.new(1,0,1,0)
+    label.BackgroundTransparency=1
+    label.TextColor3=rarityColors[rarity] or Color3.new(1,1,1)
+    label.TextStrokeTransparency=0
+    label.Text=name or "Unknown"
+    label.TextScaled=true
+    espModels[model]={box=box,label=label}
+end
+local function removeESP(model) if espModels[model] then if espModels[model].box then espModels[model].box:Destroy() end if espModels[model].label then espModels[model].label:Destroy() end espModels[model]=nil end end
+
+local gui = Instance.new("ScreenGui",PlayerGui)
+local frame = Instance.new("Frame",gui)
+frame.Size=UDim2.new(0,220,0,220)
+frame.Position=UDim2.new(0.5,-110,0.5,-110)
+frame.BackgroundColor3=Color3.fromRGB(30,30,30)
+frame.Active=true
+frame.Draggable=true
+
+local xrayBtn = Instance.new("TextButton",frame)
+xrayBtn.Size=UDim2.new(0,200,0,40)
+xrayBtn.Position=UDim2.new(0,10,0,10)
+xrayBtn.Text="XRay: OFF"
+xrayBtn.BackgroundColor3=Color3.fromRGB(50,50,50)
+xrayBtn.TextColor3=Color3.fromRGB(255,255,255)
+xrayBtn.MouseButton1Click:Connect(function()
+    xrayEnabled = not xrayEnabled
+    xrayBtn.Text = "XRay: "..(xrayEnabled and "ON" or "OFF")
+    updateXray()
+end)
+
+local espBtn = Instance.new("TextButton",frame)
+espBtn.Size=UDim2.new(0,200,0,40)
+espBtn.Position=UDim2.new(0,10,0,60)
+espBtn.Text="ESP: ON"
+espBtn.BackgroundColor3=Color3.fromRGB(0,0,0)
+espBtn.TextColor3=Color3.fromRGB(255,255,255)
+espBtn.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    espBtn.Text = "ESP: "..(espEnabled and "ON" or "OFF")
+    if not espEnabled then
+        for _,data in pairs(espModels) do if data.box then data.box:Destroy() end if data.label then data.label:Destroy() end end
+        espModels={}
+    end
+end)
+
+local closeBtn = Instance.new("TextButton",frame)
+closeBtn.Size=UDim2.new(0,200,0,40)
+closeBtn.Position=UDim2.new(0,10,0,160)
+closeBtn.Text="Close"
+closeBtn.BackgroundColor3=Color3.fromRGB(200,50,50)
+closeBtn.TextColor3=Color3.fromRGB(255,255,255)
+closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
+
+local lastCheck = 0
+local checkInterval = 3
+RunService.Heartbeat:Connect(function()
+    local now = tick()
+    if now - lastCheck < checkInterval then return end
+    lastCheck = now
+    if not espEnabled then
+        for _,data in pairs(espModels) do if data.box then data.box:Destroy() end if data.label then data.label:Destroy() end end
+        espModels={}
+        return
+    end
+    local midFolder = Workspace:FindFirstChild("Mid")
+    if not midFolder then return end
+    local blocksFolder = midFolder:FindFirstChild("Blocks")
+    if not blocksFolder then return end
+    for _,model in ipairs(blocksFolder:GetChildren()) do
+        if model:IsA("Model") then
+            local rarity = model:GetAttribute("Rarity")
+            local name = model:GetAttribute("Name")
+            if rarity and name and rarityColors[rarity] then
+                local part = model:FindFirstChild("Top") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+                if part then createESP(model,part,rarity,name) end
+            end
+            model.AncestryChanged:Connect(function(_,parent) if not parent then removeESP(model) end end)
+        end
+    end
+end)
+
+workspace.DescendantAdded:Connect(function(o)
+    if o:IsA("BasePart") and isXray(o) then o.LocalTransparencyModifier = xrayEnabled and 1 or 0 end
+end)
