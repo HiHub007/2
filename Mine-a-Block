@@ -26,9 +26,9 @@ end
 local espEnabled = true
 local espModels = {}
 local rarityColors = {
-    ["Legendary"] = Color3.fromRGB(255,215,0),
-    ["Mythic"] = Color3.fromRGB(148,0,211),
-    ["Divine"] = Color3.fromRGB(0,191,255)
+    ["Legendary"] = Color3.fromRGB(193, 190, 66),
+    ["Mythic"] = Color3.fromRGB(255, 0, 0),
+    ["Divine"] = Color3.fromRGB(207, 96, 36)
 }
 local function createESP(model, part, rarity, name)
     if espModels[model] then return end
