@@ -82,7 +82,7 @@ local function createESP(target, nameText, color)
 		end
 	end)
 
-	return {highlight = hl, billboard = bb, updateConn = updateConn}
+	return {highlight = hl, billboard = bb, updateConn = updateConn, target = target}
 end
 
 -- ====================== ESP Objects ======================
@@ -91,33 +91,76 @@ local scaretrapsESP = {}
 local mazeTransitionESP
 local npcsESP = {}
 
+local npcAddedConn
+local mazeAddedConn
+
+-- ====================== Add/Track ESP ======================
 local function addAllESP()
-	if pim and pim.Parent then
+	-- Pim
+	if pim and pim.Parent and not pimESP then
 		pimESP = createESP(pim, "ไอเป็ด", Color3.fromRGB(255,0,0))
 	end
 
-	-- Scaretraps และ NPCs
+	-- Scaretrap & NPCs
 	for _, npc in ipairs(npcFolder:GetChildren()) do
 		if npc.Name == "Scaretrap" then
-			table.insert(scaretrapsESP, createESP(npc, "หัวฟักทอง", Color3.fromRGB(255,175,0)))
+			if not table.find(scaretrapsESP, npc) then
+				table.insert(scaretrapsESP, createESP(npc, "หัวฟักทอง", Color3.fromRGB(255,175,0)))
+			end
 		elseif npc ~= pim then
-			table.insert(npcsESP, createESP(npc, npc.Name, Color3.fromRGB(255,255,0)))
+			if not table.find(npcsESP, npc) then
+				table.insert(npcsESP, createESP(npc, npc.Name, Color3.fromRGB(255,255,0)))
+			end
 		end
 	end
 
-	-- ติดตาม NPC ใหม่อัตโนมัติ
-	npcFolder.ChildAdded:Connect(function(child)
-		if espEnabled then
-			if child.Name == "Scaretrap" then
-				table.insert(scaretrapsESP, createESP(child, "หัวฟักทอง", Color3.fromRGB(255,175,0)))
-			elseif child ~= pim then
-				table.insert(npcsESP, createESP(child, child.Name, Color3.fromRGB(255,255,0)))
+	-- ติดตาม NPC ใหม่
+	if not npcAddedConn then
+		npcAddedConn = npcFolder.ChildAdded:Connect(function(child)
+			if espEnabled then
+				if child.Name == "Scaretrap" then
+					table.insert(scaretrapsESP, createESP(child, "หัวฟักทอง", Color3.fromRGB(255,175,0)))
+				elseif child ~= pim then
+					table.insert(npcsESP, createESP(child, child.Name, Color3.fromRGB(255,255,0)))
+				end
 			end
-		end
-	end)
+		end)
+	end
 end
 
+-- ====================== Track Maze.transition แบบ Dynamic ======================
+local function trackMazeTransition()
+	local function addTransitionESP(transition)
+		if not transition then return end
+		if mazeTransitionESP and mazeTransitionESP.billboard.Parent then return end
+		mazeTransitionESP = createESP(transition, "ทางออก", Color3.fromRGB(0,255,255))
+	end
+
+	-- ตรวจตอนเริ่ม
+	addTransitionESP(mazeFolder:FindFirstChild("transition"))
+
+	-- ติดตามสร้างใหม่ตลอดเวลา
+	if not mazeAddedConn then
+		mazeAddedConn = mazeFolder.ChildAdded:Connect(function(child)
+			if espEnabled and child.Name == "transition" then
+				addTransitionESP(child)
+			end
+		end)
+	end
+end
+
+-- ====================== Remove ESP ======================
 local function removeAllESP()
+	if npcAddedConn then
+		npcAddedConn:Disconnect()
+		npcAddedConn = nil
+	end
+	if mazeAddedConn then
+		mazeAddedConn:Disconnect()
+		mazeAddedConn = nil
+	end
+
+	-- Pim
 	if pimESP then
 		if pimESP.updateConn then pimESP.updateConn:Disconnect() end
 		if pimESP.highlight then pimESP.highlight:Destroy() end
@@ -125,6 +168,7 @@ local function removeAllESP()
 		pimESP = nil
 	end
 
+	-- Scaretraps
 	for _, esp in ipairs(scaretrapsESP) do
 		if esp.updateConn then esp.updateConn:Disconnect() end
 		if esp.highlight then esp.highlight:Destroy() end
@@ -132,6 +176,7 @@ local function removeAllESP()
 	end
 	scaretrapsESP = {}
 
+	-- NPCs
 	for _, esp in ipairs(npcsESP) do
 		if esp.updateConn then esp.updateConn:Disconnect() end
 		if esp.highlight then esp.highlight:Destroy() end
@@ -139,6 +184,7 @@ local function removeAllESP()
 	end
 	npcsESP = {}
 
+	-- Maze.transition
 	if mazeTransitionESP then
 		if mazeTransitionESP.updateConn then mazeTransitionESP.updateConn:Disconnect() end
 		if mazeTransitionESP.highlight then mazeTransitionESP.highlight:Destroy() end
@@ -155,6 +201,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		updateGUILabel()
 		if espEnabled then
 			addAllESP()
+			trackMazeTransition()
 			Lighting.FogStart = 0
 			Lighting.FogEnd = 999999
 			Lighting.GlobalShadows = false
@@ -175,6 +222,7 @@ local function onCharacterAdded(char)
 	local humanoidRootPart = char:WaitForChild("HumanoidRootPart")
 	if espEnabled then
 		addAllESP()
+		trackMazeTransition()
 	end
 end
 
@@ -182,25 +230,3 @@ player.CharacterAdded:Connect(onCharacterAdded)
 if player.Character then
 	onCharacterAdded(player.Character)
 end
-
--- ====================== Track Maze.transition แบบ Dynamic ======================
-local function trackMazeTransition()
-	local function addTransitionESP(transition)
-		if not transition then return end
-		if mazeTransitionESP and mazeTransitionESP.billboard.Parent then return end
-		mazeTransitionESP = createESP(transition, "ทางออก", Color3.fromRGB(0,255,255))
-	end
-
-	-- ตรวจตอนเริ่ม
-	local initialTransition = mazeFolder:FindFirstChild("transition")
-	addTransitionESP(initialTransition)
-
-	-- ติดตามสร้างใหม่ตลอดเวลา
-	mazeFolder.ChildAdded:Connect(function(child)
-		if espEnabled and child.Name == "transition" then
-			addTransitionESP(child)
-		end
-	end)
-end
-
-trackMazeTransition()
